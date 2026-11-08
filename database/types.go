@@ -18,7 +18,7 @@ type MsgIdPair struct {
 	TgThreadId int64
 	TgMsgId    int64
 
-	MarkRead sql.NullBool
+	MarkRead    sql.NullBool
 	AutoReacted bool
 }
 
@@ -44,9 +44,9 @@ type ChatEphemeralSettings struct {
 }
 
 type MessageReceipt struct {
-	WaMsgId       string    `gorm:"primaryKey;index:idx_receipt_msg_chat_participant;index:idx_receipt_msg_chat"`
-	WaChatId      string    `gorm:"primaryKey;index:idx_receipt_msg_chat_participant;index:idx_receipt_msg_chat"`
-	ParticipantId string    `gorm:"primaryKey;index:idx_receipt_msg_chat_participant"`
+	WaMsgId       string `gorm:"primaryKey;index:idx_receipt_msg_chat_participant;index:idx_receipt_msg_chat"`
+	WaChatId      string `gorm:"primaryKey;index:idx_receipt_msg_chat_participant;index:idx_receipt_msg_chat"`
+	ParticipantId string `gorm:"primaryKey;index:idx_receipt_msg_chat_participant"`
 	ReceiptType   string
 	ReceiptTime   time.Time
 }
@@ -59,6 +59,7 @@ func AutoMigrate() error {
 		&ContactName{},
 		&ChatEphemeralSettings{},
 		&MessageReceipt{},
+		&MessageReaction{},
 	)
 	if err != nil {
 		return err

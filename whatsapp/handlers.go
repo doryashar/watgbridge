@@ -1332,30 +1332,21 @@ func (bc *bridgeContext) handleReaction(v *events.Message, reactionMsg *waE2E.Re
 		return
 	}
 
-	var reactionText string
-	if *reactionMsg.Text != "" {
-		reactionText = fmt.Sprintf("<code>Reacted to this message with %s</code>",
-			html.EscapeString(*reactionMsg.Text))
-	} else {
-		reactionText = "<code>Revoked their reaction to this message</code>"
-	}
-	bc.bridgedText += reactionText
-
-	sentMsg, err := bc.tgBot.SendMessage(bc.cfg.Telegram.TargetChatID, bc.bridgedText,
-		&gotgbot.SendMessageOpts{
-			ReplyParameters: &gotgbot.ReplyParameters{MessageId: tgMsgId},
-			MessageThreadId: bc.threadId,
-		})
-	if err != nil {
-		bc.logger.Error("failed to send telegram reaction message",
-			zap.String("event_id", v.Info.ID),
+	// Persist the reaction state and update the bridged message's inline
+	// keyboard in place — no new Telegram message per reaction.
+	sender := utils.WaNormalizeSender(v.Info.Sender)
+	if err := database.ReactionUpsert(waChatIdForLookup, reactionMsg.Key.GetID(), sender, reactionMsg.GetText()); err != nil {
+		bc.logger.Error("failed to store reaction",
 			zap.Error(err),
+			zap.String("msg_id", reactionMsg.Key.GetID()),
+			zap.String("sender", sender),
 		)
-		return
 	}
-	if sentMsg.MessageId != 0 {
-		database.MsgIdAddNewPair(bc.msgId, bc.senderStr, waChatIdForLookup,
-			bc.cfg.Telegram.TargetChatID, sentMsg.MessageId, sentMsg.MessageThreadId)
+	if err := utils.TgUpdateReactions(tgChatId, tgMsgId, waChatIdForLookup, reactionMsg.Key.GetID()); err != nil {
+		bc.logger.Error("failed to update reaction markup on bridged message",
+			zap.Error(err),
+			zap.Int64("tg_msg_id", tgMsgId),
+		)
 	}
 }
 
