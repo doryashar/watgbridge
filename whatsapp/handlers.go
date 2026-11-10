@@ -630,10 +630,18 @@ func MessageFromOthersEventHandler(text string, v *events.Message, isEdited bool
 		return
 	}
 
-	replyMarkup := utils.TgBuildUrlButton(
-		utils.WaGetContactName(v.Info.Sender),
-		fmt.Sprintf("https://wa.me/%s", v.Info.MessageSource.Sender.ToNonAD().User),
-	)
+	// Inline keyboard on every bridged message: when the reactions feature is
+	// on, ship the default emoji buttons so reacting is one tap; otherwise
+	// keep the classic sender wa.me link button.
+	var replyMarkup gotgbot.InlineKeyboardMarkup
+	if cfg.Telegram.Reactions {
+		replyMarkup = utils.TgBuildBridgedKeyboard(utils.WaNormalizeChatId(v.Info.Chat), msgId)
+	} else {
+		replyMarkup = utils.TgBuildUrlButton(
+			utils.WaGetContactName(v.Info.Sender),
+			fmt.Sprintf("https://wa.me/%s", v.Info.MessageSource.Sender.ToNonAD().User),
+		)
+	}
 
 	// Handle @all / @everyone from allowed groups
 	if !isEdited {

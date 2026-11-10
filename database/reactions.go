@@ -58,6 +58,20 @@ func ReactionCounts(waChatId, waMsgId string) (map[string]int, error) {
 	return counts, nil
 }
 
+// ReactionRows returns the raw reaction rows (sender + emoji) for a message,
+// in insertion order — used for the "who reacted with what" summary.
+func ReactionRows(waChatId, waMsgId string) ([]MessageReaction, error) {
+	db := state.State.Database
+
+	var rows []MessageReaction
+	res := db.Where("wa_chat_id = ? AND wa_msg_id = ?", waChatId, waMsgId).
+		Order("rowid ASC").Find(&rows)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	return rows, nil
+}
+
 // ReactionGetSenderEmoji returns the emoji the sender currently has on the
 // message, or "" when they have none.
 func ReactionGetSenderEmoji(waChatId, waMsgId, senderId string) (string, error) {

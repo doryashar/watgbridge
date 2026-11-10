@@ -68,3 +68,24 @@ func ReactionButtonCallbackHandler(b *gotgbot.Bot, c *ext.Context) error {
 	cq.Answer(b, &gotgbot.AnswerCallbackQueryOpts{Text: answer})
 	return nil
 }
+
+// ReactionInfoCallbackHandler answers the "🙂 Reactions" button with a popup
+// listing who reacted with what. Read-only — nothing is toggled or sent.
+func ReactionInfoCallbackHandler(b *gotgbot.Bot, c *ext.Context) error {
+	cq := c.CallbackQuery
+	if cq == nil {
+		return nil
+	}
+
+	parts := strings.SplitN(strings.TrimPrefix(cq.Data, utils.ReactionInfoCallbackPrefix), "|", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		cq.Answer(b, &gotgbot.AnswerCallbackQueryOpts{Text: "Invalid reaction data", ShowAlert: true})
+		return nil
+	}
+
+	cq.Answer(b, &gotgbot.AnswerCallbackQueryOpts{
+		Text:      utils.TgBuildReactionSummaryText(parts[0], parts[1]),
+		ShowAlert: true,
+	})
+	return nil
+}

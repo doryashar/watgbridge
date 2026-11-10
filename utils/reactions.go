@@ -21,8 +21,32 @@ import (
 // buttons. Format: "react|<waChatId>|<waMsgId>|<emoji>".
 const ReactionCallbackPrefix = "react|"
 
+// ReactionInfoCallbackPrefix marks inline-keyboard callback data for the
+// "who reacted with what" button. Format: "reactinfo|<waChatId>|<waMsgId>".
+const ReactionInfoCallbackPrefix = "reactinfo|"
+
+// DefaultReactions are the emoji buttons every bridged message ships with, so
+// reactions are one tap away even before anyone reacts. Non-default emojis
+// still get their own buttons when used.
+var DefaultReactions = []string{"👍", "❤️", "😂", "😮", "🙏"}
+
 func ReactionCallbackData(waChatId, waMsgId, emoji string) string {
 	return ReactionCallbackPrefix + waChatId + "|" + waMsgId + "|" + emoji
+}
+
+func ReactionInfoCallbackData(waChatId, waMsgId string) string {
+	return ReactionInfoCallbackPrefix + waChatId + "|" + waMsgId
+}
+
+// WaNormalizeChatId resolves LID-form chat ids to their phone-number form so
+// callback data matches what reaction events store in the database.
+func WaNormalizeChatId(jid types.JID) string {
+	if jid.Server == types.HiddenUserServer && state.State.WhatsAppClient != nil {
+		if pn, err := state.State.WhatsAppClient.Store.LIDs.GetPNForLID(context.Background(), jid.ToNonAD()); err == nil {
+			return pn.String()
+		}
+	}
+	return jid.String()
 }
 
 // WaNormalizeSender resolves hidden/LID senders to their phone-number JID
@@ -37,25 +61,39 @@ func WaNormalizeSender(sender types.JID) string {
 	return s.String()
 }
 
-// reactionSenderButton rebuilds the original sender URL button for a bridged
-// message (contact name -> wa.me link), matching TgBuildUrlButton usage in the
-// WhatsApp handlers.
-func reactionSenderButton(participantId string) (string, string) {
-	if state.State.WhatsAppClient == nil {
-		return "", ""
-	}
-	jid, err := types.ParseJID(participantId)
+// reactionSenderName resolves a reaction sender JID string to a display name
+// (contact name when known, "You" for the linked account, phone number as a
+// fallback).
+func reactionSenderName(senderJidStr string) string {
+	jid, err := types.ParseJID(senderJidStr)
 	if err != nil || jid.User == "" {
-		return "", ""
+		return senderJidStr
 	}
-	return WaGetContactName(jid), fmt.Sprintf("https://wa.me/%s", jid.User)
+	if state.State.WhatsAppClient == nil || state.State.WhatsAppClient.Store == nil {
+		return jid.User
+	}
+	return WaGetContactName(jid)
+}
+
+// TgBuildBridgedKeyboard builds the inline keyboard attached to every newly
+// bridged message: one row with the default emoji buttons, so a reaction is a
+// single tap even before anyone has reacted.
+func TgBuildBridgedKeyboard(waChatId, waMsgId string) gotgbot.InlineKeyboardMarkup {
+	row := make([]gotgbot.InlineKeyboardButton, 0, len(DefaultReactions))
+	for _, e := range DefaultReactions {
+		row = append(row, gotgbot.InlineKeyboardButton{
+			Text:         e,
+			CallbackData: ReactionCallbackData(waChatId, waMsgId, e),
+		})
+	}
+	return gotgbot.InlineKeyboardMarkup{InlineKeyboard: [][]gotgbot.InlineKeyboardButton{row}}
 }
 
 // TgBuildReactionMarkup rebuilds a bridged message's inline keyboard:
-// row 1 = the original sender URL button (preserved), then one button per
-// emoji with its count. With zero reactions the markup collapses back to the
-// sender button alone.
-func TgBuildReactionMarkup(waChatId, waMsgId, participantId string) (gotgbot.InlineKeyboardMarkup, error) {
+// row 1 = "who reacted with what" summary button (only once reactions exist;
+// pressing it pops up sender names per emoji), then the default emoji buttons
+// (with counts where present) followed by any non-default emojis used.
+func TgBuildReactionMarkup(waChatId, waMsgId string) (gotgbot.InlineKeyboardMarkup, error) {
 	counts, err := database.ReactionCounts(waChatId, waMsgId)
 	if err != nil {
 		return gotgbot.InlineKeyboardMarkup{}, err
@@ -63,34 +101,94 @@ func TgBuildReactionMarkup(waChatId, waMsgId, participantId string) (gotgbot.Inl
 
 	markup := gotgbot.InlineKeyboardMarkup{InlineKeyboard: [][]gotgbot.InlineKeyboardButton{}}
 
-	if name, url := reactionSenderButton(participantId); name != "" {
-		markup.InlineKeyboard = append(markup.InlineKeyboard, []gotgbot.InlineKeyboardButton{{Text: name, Url: url}})
+	if len(counts) > 0 {
+		markup.InlineKeyboard = append(markup.InlineKeyboard, []gotgbot.InlineKeyboardButton{{
+			Text:         "🙂 Reactions",
+			CallbackData: ReactionInfoCallbackData(waChatId, waMsgId),
+		}})
 	}
 
-	emojis := make([]string, 0, len(counts))
-	for e := range counts {
-		emojis = append(emojis, e)
-	}
-	// Busiest first, ties broken alphabetically for stable ordering.
-	sort.Slice(emojis, func(i, j int) bool {
-		if counts[emojis[i]] != counts[emojis[j]] {
-			return counts[emojis[i]] > counts[emojis[j]]
+	// Default emojis first (fixed order), then extras — busiest first, ties
+	// broken alphabetically for stable ordering.
+	seen := make(map[string]bool, len(counts))
+	rows := make([][]gotgbot.InlineKeyboardButton, 0, 2)
+
+	row := make([]gotgbot.InlineKeyboardButton, 0, len(DefaultReactions))
+	for _, e := range DefaultReactions {
+		text := e
+		if counts[e] > 0 {
+			text = fmt.Sprintf("%s %d", e, counts[e])
 		}
-		return emojis[i] < emojis[j]
+		row = append(row, gotgbot.InlineKeyboardButton{
+			Text:         text,
+			CallbackData: ReactionCallbackData(waChatId, waMsgId, e),
+		})
+		seen[e] = true
+	}
+	rows = append(rows, row)
+
+	extras := make([]string, 0, len(counts))
+	for e := range counts {
+		if !seen[e] {
+			extras = append(extras, e)
+		}
+	}
+	sort.Slice(extras, func(i, j int) bool {
+		if counts[extras[i]] != counts[extras[j]] {
+			return counts[extras[i]] > counts[extras[j]]
+		}
+		return extras[i] < extras[j]
 	})
 
-	if len(emojis) > 0 {
-		row := make([]gotgbot.InlineKeyboardButton, 0, len(emojis))
-		for _, e := range emojis {
-			row = append(row, gotgbot.InlineKeyboardButton{
+	if len(extras) > 0 {
+		extraRow := make([]gotgbot.InlineKeyboardButton, 0, len(extras))
+		for _, e := range extras {
+			extraRow = append(extraRow, gotgbot.InlineKeyboardButton{
 				Text:         fmt.Sprintf("%s %d", e, counts[e]),
 				CallbackData: ReactionCallbackData(waChatId, waMsgId, e),
 			})
 		}
-		markup.InlineKeyboard = append(markup.InlineKeyboard, row)
+		rows = append(rows, extraRow)
 	}
 
+	markup.InlineKeyboard = append(markup.InlineKeyboard, rows...)
 	return markup, nil
+}
+
+// TgBuildReactionSummaryText renders the "who reacted with what" popup shown
+// when the summary button is pressed: one line per emoji with sender names.
+// Telegram caps callback answers at 200 characters — longer lists truncate.
+func TgBuildReactionSummaryText(waChatId, waMsgId string) string {
+	rows, err := database.ReactionRows(waChatId, waMsgId)
+	if err != nil {
+		return "Failed to load reactions"
+	}
+	if len(rows) == 0 {
+		return "No reactions yet"
+	}
+
+	byEmoji := make(map[string][]string, len(rows))
+	var emojiOrder []string
+	for _, r := range rows {
+		if _, ok := byEmoji[r.Emoji]; !ok {
+			emojiOrder = append(emojiOrder, r.Emoji)
+		}
+		byEmoji[r.Emoji] = append(byEmoji[r.Emoji], reactionSenderName(r.Sender))
+	}
+
+	var sb strings.Builder
+	for i, e := range emojiOrder {
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(e + " " + strings.Join(byEmoji[e], ", "))
+	}
+
+	text := sb.String()
+	if runes := []rune(text); len(runes) > 200 {
+		text = string(runes[:197]) + "..."
+	}
+	return text
 }
 
 // TgUpdateReactions edits a bridged Telegram message's reply markup in place
@@ -100,8 +198,7 @@ func TgUpdateReactions(tgChatId, tgMsgId int64, waChatId, waMsgId string) error 
 		return nil
 	}
 
-	participantId, _ := database.MsgIdGetParticipant(waMsgId, waChatId)
-	markup, err := TgBuildReactionMarkup(waChatId, waMsgId, participantId)
+	markup, err := TgBuildReactionMarkup(waChatId, waMsgId)
 	if err != nil {
 		return err
 	}

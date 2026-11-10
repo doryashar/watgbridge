@@ -176,6 +176,11 @@ func AddTelegramHandlers() {
 		func(cq *gotgbot.CallbackQuery) bool {
 			return strings.HasPrefix(cq.Data, utils.ReactionCallbackPrefix)
 		}, ReactionButtonCallbackHandler), DispatcherCallbackHandlerGroup)
+
+	dispatcher.AddHandlerToGroup(handlers.NewCallback(
+		func(cq *gotgbot.CallbackQuery) bool {
+			return strings.HasPrefix(cq.Data, utils.ReactionInfoCallbackPrefix)
+		}, ReactionInfoCallbackHandler), DispatcherCallbackHandlerGroup)
 }
 
 func BridgeTelegramToWhatsAppHandler(b *gotgbot.Bot, c *ext.Context) error {
