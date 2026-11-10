@@ -39,7 +39,12 @@ func TgMakeReplyParameters(messageId, chatId int64) *gotgbot.ReplyParameters {
 		return nil
 	}
 
-	replyParameters := &gotgbot.ReplyParameters{MessageId: messageId}
+	replyParameters := &gotgbot.ReplyParameters{
+		MessageId: messageId,
+		// If the replied-to message was deleted (e.g. the 2026-11-10 forum
+		// history purge), send the message anyway instead of dropping it.
+		AllowSendingWithoutReply: true,
+	}
 	if chatId != 0 {
 		replyParameters.ChatId = chatId
 	}
