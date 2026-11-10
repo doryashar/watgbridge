@@ -1282,9 +1282,10 @@ func (bc *bridgeContext) handleTextOrReaction(text string, v *events.Message, is
 	if isEdited && !bc.cfg.WhatsApp.SendEditedMessageUpdates {
 		if isDocument {
 			sentMsg, _, err = bc.tgBot.EditMessageCaption(&gotgbot.EditMessageCaptionOpts{
-				ChatId:    bc.cfg.Telegram.TargetChatID,
-				MessageId: bc.replyToMsgId,
-				Caption:   bc.bridgedText,
+				ChatId:      bc.cfg.Telegram.TargetChatID,
+				MessageId:   bc.replyToMsgId,
+				Caption:     bc.bridgedText,
+				ReplyMarkup: bc.replyMarkup,
 			})
 		} else {
 			sentMsg, _, err = bc.tgBot.EditMessageText(&gotgbot.EditMessageTextOpts{
@@ -1292,6 +1293,7 @@ func (bc *bridgeContext) handleTextOrReaction(text string, v *events.Message, is
 				ChatId:             bc.cfg.Telegram.TargetChatID,
 				MessageId:          bc.replyToMsgId,
 				LinkPreviewOptions: &gotgbot.LinkPreviewOptions{},
+				ReplyMarkup:        bc.replyMarkup,
 			})
 		}
 	} else {
@@ -1300,6 +1302,7 @@ func (bc *bridgeContext) handleTextOrReaction(text string, v *events.Message, is
 				ReplyParameters:    utils.TgMakeReplyParameters(bc.replyToMsgId, 0),
 				MessageThreadId:    bc.threadId,
 				LinkPreviewOptions: &gotgbot.LinkPreviewOptions{},
+				ReplyMarkup:        bc.replyMarkup,
 			})
 	}
 
