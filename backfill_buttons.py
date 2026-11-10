@@ -58,18 +58,21 @@ pairs_db.close()
 
 
 def build_keyboard(chat: str, msg: str):
+    """Callback data carries ONLY the emoji — the handler resolves the
+    chat/message from the callback query's own message (Telegram caps
+    callback_data at 64 bytes; id-embedded data overflowed on long ids)."""
     c = counts.get((chat, msg), {})
     rows = []
     if c:
-        rows.append([{"text": "🙂 Reactions", "callback_data": f"reactinfo|{chat}|{msg}"}])
+        rows.append([{"text": "🙂 Reactions", "callback_data": "reactinfo"}])
     row, extras = [], []
     for e in DEFAULT_REACTIONS:
         text = f"{e} {c[e]}" if c.get(e) else e
-        row.append({"text": text, "callback_data": f"react|{chat}|{msg}|{e}"})
+        row.append({"text": text, "callback_data": f"react|{e}"})
     rows.append(row)
     for e, n in sorted(c.items(), key=lambda kv: (-kv[1], kv[0])):
         if e not in DEFAULT_REACTIONS:
-            extras.append({"text": f"{e} {n}", "callback_data": f"react|{chat}|{msg}|{e}"})
+            extras.append({"text": f"{e} {n}", "callback_data": f"react|{e}"})
     if extras:
         rows.append(extras)
     return {"inline_keyboard": rows}
@@ -135,7 +138,7 @@ for pass_no in (1, 2):
         if i % 100 == 0:
             rate = i / max(time.time() - t0, 1)
             print(f"[p{pass_no} {i}/{len(pending)}] ok={done} skip={skipped} fail={failed} ({rate:.1f}/s)", flush=True)
-        time.sleep(0.5)
+        time.sleep(1.1)  # just above Telegram's per-chat edit rate: avoids 429 penalty windows
     pending = unresolved
     if not pending:
         break

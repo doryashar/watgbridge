@@ -635,7 +635,7 @@ func MessageFromOthersEventHandler(text string, v *events.Message, isEdited bool
 	// keep the classic sender wa.me link button.
 	var replyMarkup gotgbot.InlineKeyboardMarkup
 	if cfg.Telegram.Reactions {
-		replyMarkup = utils.TgBuildBridgedKeyboard(utils.WaNormalizeChatId(v.Info.Chat), msgId)
+		replyMarkup = utils.TgBuildBridgedKeyboard()
 	} else {
 		replyMarkup = utils.TgBuildUrlButton(
 			utils.WaGetContactName(v.Info.Sender),

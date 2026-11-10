@@ -18,24 +18,25 @@ import (
 )
 
 // ReactionCallbackPrefix marks inline-keyboard callback data for reaction
-// buttons. Format: "react|<waChatId>|<waMsgId>|<emoji>".
+// buttons. Data is "react|<emoji>" — the chat/message identity comes from the
+// callback query's own message, keeping data far under Telegram's 64-byte cap.
 const ReactionCallbackPrefix = "react|"
 
-// ReactionInfoCallbackPrefix marks inline-keyboard callback data for the
-// "who reacted with what" button. Format: "reactinfo|<waChatId>|<waMsgId>".
-const ReactionInfoCallbackPrefix = "reactinfo|"
+// ReactionInfoCallbackPrefix marks callback data for the "who reacted with
+// what" button. Data is just the prefix — identity comes from the query.
+const ReactionInfoCallbackPrefix = "reactinfo"
 
 // DefaultReactions are the emoji buttons every bridged message ships with, so
 // reactions are one tap away even before anyone reacts. Non-default emojis
 // still get their own buttons when used.
 var DefaultReactions = []string{"👍", "❤️", "😂", "😮", "🙏"}
 
-func ReactionCallbackData(waChatId, waMsgId, emoji string) string {
-	return ReactionCallbackPrefix + waChatId + "|" + waMsgId + "|" + emoji
+func ReactionCallbackData(emoji string) string {
+	return ReactionCallbackPrefix + emoji
 }
 
-func ReactionInfoCallbackData(waChatId, waMsgId string) string {
-	return ReactionInfoCallbackPrefix + waChatId + "|" + waMsgId
+func ReactionInfoCallbackData() string {
+	return ReactionInfoCallbackPrefix
 }
 
 // WaNormalizeChatId resolves LID-form chat ids to their phone-number form so
@@ -78,12 +79,12 @@ func reactionSenderName(senderJidStr string) string {
 // TgBuildBridgedKeyboard builds the inline keyboard attached to every newly
 // bridged message: one row with the default emoji buttons, so a reaction is a
 // single tap even before anyone has reacted.
-func TgBuildBridgedKeyboard(waChatId, waMsgId string) gotgbot.InlineKeyboardMarkup {
+func TgBuildBridgedKeyboard() gotgbot.InlineKeyboardMarkup {
 	row := make([]gotgbot.InlineKeyboardButton, 0, len(DefaultReactions))
 	for _, e := range DefaultReactions {
 		row = append(row, gotgbot.InlineKeyboardButton{
 			Text:         e,
-			CallbackData: ReactionCallbackData(waChatId, waMsgId, e),
+			CallbackData: ReactionCallbackData(e),
 		})
 	}
 	return gotgbot.InlineKeyboardMarkup{InlineKeyboard: [][]gotgbot.InlineKeyboardButton{row}}
@@ -104,7 +105,7 @@ func TgBuildReactionMarkup(waChatId, waMsgId string) (gotgbot.InlineKeyboardMark
 	if len(counts) > 0 {
 		markup.InlineKeyboard = append(markup.InlineKeyboard, []gotgbot.InlineKeyboardButton{{
 			Text:         "🙂 Reactions",
-			CallbackData: ReactionInfoCallbackData(waChatId, waMsgId),
+			CallbackData: ReactionInfoCallbackData(),
 		}})
 	}
 
@@ -121,7 +122,7 @@ func TgBuildReactionMarkup(waChatId, waMsgId string) (gotgbot.InlineKeyboardMark
 		}
 		row = append(row, gotgbot.InlineKeyboardButton{
 			Text:         text,
-			CallbackData: ReactionCallbackData(waChatId, waMsgId, e),
+			CallbackData: ReactionCallbackData(e),
 		})
 		seen[e] = true
 	}
@@ -145,7 +146,7 @@ func TgBuildReactionMarkup(waChatId, waMsgId string) (gotgbot.InlineKeyboardMark
 		for _, e := range extras {
 			extraRow = append(extraRow, gotgbot.InlineKeyboardButton{
 				Text:         fmt.Sprintf("%s %d", e, counts[e]),
-				CallbackData: ReactionCallbackData(waChatId, waMsgId, e),
+				CallbackData: ReactionCallbackData(e),
 			})
 		}
 		rows = append(rows, extraRow)
