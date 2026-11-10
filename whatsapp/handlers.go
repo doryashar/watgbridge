@@ -815,6 +815,7 @@ func (bc *bridgeContext) handleImageMessage(v *events.Message) {
 				Caption:         bc.bridgedText,
 				ReplyParameters: utils.TgMakeReplyParameters(bc.replyToMsgId, 0),
 				MessageThreadId: bc.threadId,
+				ReplyMarkup:     bc.replyMarkup,
 			})
 		bc.savePair(sentMsg)
 		return
@@ -827,6 +828,7 @@ func (bc *bridgeContext) handleImageMessage(v *events.Message) {
 			ReplyParameters: utils.TgMakeReplyParameters(bc.replyToMsgId, 0),
 			HasSpoiler:      imageMsg.GetViewOnce(),
 			MessageThreadId: bc.threadId,
+			ReplyMarkup:     bc.replyMarkup,
 		})
 	bc.savePair(sentMsg)
 }
@@ -860,6 +862,7 @@ func (bc *bridgeContext) handleGifMessage(v *events.Message) {
 			Caption:         bc.bridgedText,
 			ReplyParameters: utils.TgMakeReplyParameters(bc.replyToMsgId, 0),
 			MessageThreadId: bc.threadId,
+			ReplyMarkup:     bc.replyMarkup,
 		})
 	bc.savePair(sentMsg)
 }
@@ -915,6 +918,7 @@ func (bc *bridgeContext) handleVideoMessage(v *events.Message) {
 				ReplyParameters: utils.TgMakeReplyParameters(bc.replyToMsgId, 0),
 				HasSpoiler:      videoMsg.GetViewOnce(),
 				MessageThreadId: bc.threadId,
+				ReplyMarkup:     bc.replyMarkup,
 			})
 	}
 	bc.savePair(sentMsg)
@@ -948,6 +952,7 @@ func (bc *bridgeContext) handleVoiceNoteMessage(v *events.Message) {
 			Duration:        int64(audioMsg.GetSeconds()),
 			ReplyParameters: utils.TgMakeReplyParameters(bc.replyToMsgId, 0),
 			MessageThreadId: bc.threadId,
+			ReplyMarkup:     bc.replyMarkup,
 		})
 	bc.savePair(sentMsg)
 }
@@ -980,6 +985,7 @@ func (bc *bridgeContext) handleAudioMessage(v *events.Message) {
 			Duration:        int64(audioMsg.GetSeconds()),
 			ReplyParameters: utils.TgMakeReplyParameters(bc.replyToMsgId, 0),
 			MessageThreadId: bc.threadId,
+			ReplyMarkup:     bc.replyMarkup,
 		})
 	bc.savePair(sentMsg)
 }
@@ -1013,6 +1019,7 @@ func (bc *bridgeContext) handleDocumentMessage(v *events.Message) {
 			Caption:         bc.bridgedText,
 			ReplyParameters: utils.TgMakeReplyParameters(bc.replyToMsgId, 0),
 			MessageThreadId: bc.threadId,
+			ReplyMarkup:     bc.replyMarkup,
 		})
 	bc.savePair(sentMsg)
 }
