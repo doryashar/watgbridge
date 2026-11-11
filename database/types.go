@@ -60,6 +60,7 @@ func AutoMigrate() error {
 		&ChatEphemeralSettings{},
 		&MessageReceipt{},
 		&MessageReaction{},
+		&ReactionNotice{},
 	)
 	if err != nil {
 		return err

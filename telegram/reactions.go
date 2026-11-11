@@ -113,9 +113,9 @@ func ReactionButtonCallbackHandler(b *gotgbot.Bot, c *ext.Context) error {
 	// Our own sends produce no echo event, so persist + refresh here.
 	_ = database.ReactionUpsert(waChatId, waMsgId, selfJid, newEmoji)
 
-	tgChatId, _, tgMsgId, err := database.MsgIdGetTgFromWa(waMsgId, waChatId)
+	tgChatId, tgThreadId, tgMsgId, err := database.MsgIdGetTgFromWa(waMsgId, waChatId)
 	if err == nil && tgMsgId != 0 {
-		_ = utils.TgUpdateReactions(tgChatId, tgMsgId, waChatId, waMsgId)
+		_ = utils.TgRefreshReactions(tgChatId, tgThreadId, tgMsgId, waChatId, waMsgId)
 	}
 
 	cq.Answer(b, &gotgbot.AnswerCallbackQueryOpts{Text: answer})

@@ -215,6 +215,77 @@ func TgUpdateReactions(tgChatId, tgMsgId int64, waChatId, waMsgId string) error 
 	return err
 }
 
+// tgCantEditTarget reports whether Telegram refused the edit because the
+// message belongs to a user (e.g. Dor's own TG→WA posts).
+func tgCantEditTarget(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "message can't be edited")
+}
+
+// TgRefreshReactions refreshes the reaction display for a bridged message.
+// On messages the bot owns it edits the keyboard in place; on user-authored
+// messages (TG→WA posts) it falls back to the one-per-message reactions reply
+// tracked in reaction_notices, updating that reply instead.
+func TgRefreshReactions(tgChatId, tgThreadId, tgMsgId int64, waChatId, waMsgId string) error {
+	err := TgUpdateReactions(tgChatId, tgMsgId, waChatId, waMsgId)
+	if err == nil {
+		return nil
+	}
+	if !tgCantEditTarget(err) {
+		return err
+	}
+	return TgUpsertReactionNotice(tgChatId, tgThreadId, tgMsgId, waChatId, waMsgId)
+}
+
+// TgUpsertReactionNotice creates or refreshes the reactions reply under a
+// user-authored Telegram message.
+func TgUpsertReactionNotice(tgChatId, tgThreadId, tgMsgId int64, waChatId, waMsgId string) error {
+	bot := state.State.TelegramBot
+	if bot == nil {
+		return nil
+	}
+
+	markup, err := TgBuildReactionMarkup(waChatId, waMsgId)
+	if err != nil {
+		return err
+	}
+
+	replyMsgId, err := database.ReactionNoticeGet(tgChatId, tgMsgId)
+	if err != nil {
+		return err
+	}
+	if replyMsgId != 0 {
+		_, _, err = bot.EditMessageReplyMarkup(&gotgbot.EditMessageReplyMarkupOpts{
+			ChatId:      tgChatId,
+			MessageId:   replyMsgId,
+			ReplyMarkup: markup,
+		})
+		if err == nil {
+			return nil
+		}
+		if strings.Contains(err.Error(), "message is not modified") {
+			return nil
+		}
+		if strings.Contains(err.Error(), "message to edit not found") {
+			_ = database.ReactionNoticeDelete(tgChatId, tgMsgId) // recreate below
+		} else {
+			return err
+		}
+	}
+
+	msg, err := bot.SendMessage(tgChatId, "🙂", &gotgbot.SendMessageOpts{
+		ReplyParameters: &gotgbot.ReplyParameters{
+			MessageId:                tgMsgId,
+			AllowSendingWithoutReply: true,
+		},
+		MessageThreadId: tgThreadId,
+		ReplyMarkup:     markup,
+	})
+	if err != nil {
+		return err
+	}
+	return database.ReactionNoticeUpsert(tgChatId, tgMsgId, msg.MessageId)
+}
+
 // WaSendReaction sends (or revokes, emoji == "") a reaction on a WhatsApp
 // message on behalf of the linked account — used when a Telegram reaction
 // button is pressed.

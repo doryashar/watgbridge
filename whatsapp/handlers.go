@@ -1338,7 +1338,7 @@ func (bc *bridgeContext) handleReaction(v *events.Message, reactionMsg *waE2E.Re
 		}
 	}
 
-	tgChatId, _, tgMsgId, err := database.MsgIdGetTgFromWa(reactionMsg.Key.GetID(), waChatIdForLookup)
+	tgChatId, tgThreadId, tgMsgId, err := database.MsgIdGetTgFromWa(reactionMsg.Key.GetID(), waChatIdForLookup)
 	if err != nil {
 		bc.logger.Error("failed to get message ID mapping from database",
 			zap.Error(err),
@@ -1362,7 +1362,7 @@ func (bc *bridgeContext) handleReaction(v *events.Message, reactionMsg *waE2E.Re
 			zap.String("sender", sender),
 		)
 	}
-	if err := utils.TgUpdateReactions(tgChatId, tgMsgId, waChatIdForLookup, reactionMsg.Key.GetID()); err != nil {
+	if err := utils.TgRefreshReactions(tgChatId, tgThreadId, tgMsgId, waChatIdForLookup, reactionMsg.Key.GetID()); err != nil {
 		bc.logger.Error("failed to update reaction markup on bridged message",
 			zap.Error(err),
 			zap.Int64("tg_msg_id", tgMsgId),

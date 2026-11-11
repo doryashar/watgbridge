@@ -72,6 +72,51 @@ func ReactionRows(waChatId, waMsgId string) ([]MessageReaction, error) {
 	return rows, nil
 }
 
+// ReactionNotice tracks the bot's one-per-message reactions reply that sits
+// under a Telegram user's own post (which the bot cannot edit) when someone
+// reacts to its WhatsApp twin. Keyed by the TARGET Telegram message.
+type ReactionNotice struct {
+	TGChatId   int64 `gorm:"primaryKey;column:tg_chat_id"`
+	TGMsgId    int64 `gorm:"primaryKey;column:tg_msg_id"`
+	ReplyMsgId int64 `gorm:"column:reply_msg_id"`
+}
+
+// ReactionNoticeGet returns the reply message id tracking this target, or 0.
+func ReactionNoticeGet(tgChatId, tgMsgId int64) (int64, error) {
+	db := state.State.Database
+
+	var row ReactionNotice
+	res := db.Where("tg_chat_id = ? AND tg_msg_id = ?", tgChatId, tgMsgId).First(&row)
+	if res.Error != nil {
+		return 0, nil // no notice yet — not an error
+	}
+	return row.ReplyMsgId, nil
+}
+
+// ReactionNoticeUpsert records (or replaces) the reply message id.
+func ReactionNoticeUpsert(tgChatId, tgMsgId, replyMsgId int64) error {
+	db := state.State.Database
+
+	var existing ReactionNotice
+	res := db.Where("tg_chat_id = ? AND tg_msg_id = ?", tgChatId, tgMsgId).First(&existing)
+	if res.Error != nil {
+		return db.Create(&ReactionNotice{
+			TGChatId:   tgChatId,
+			TGMsgId:    tgMsgId,
+			ReplyMsgId: replyMsgId,
+		}).Error
+	}
+	existing.ReplyMsgId = replyMsgId
+	return db.Save(&existing).Error
+}
+
+// ReactionNoticeDelete drops the tracking row (e.g. reply was deleted).
+func ReactionNoticeDelete(tgChatId, tgMsgId int64) error {
+	db := state.State.Database
+	return db.Where("tg_chat_id = ? AND tg_msg_id = ?", tgChatId, tgMsgId).
+		Delete(&ReactionNotice{}).Error
+}
+
 // ReactionGetSenderEmoji returns the emoji the sender currently has on the
 // message, or "" when they have none.
 func ReactionGetSenderEmoji(waChatId, waMsgId, senderId string) (string, error) {
